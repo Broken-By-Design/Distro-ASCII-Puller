@@ -116,6 +116,11 @@
     const ASCII_BASE  = 'https://raw.githubusercontent.com/fastfetch-cli/fastfetch/dev/src/logo/ascii/';
     const PARSE_LINES_WINDOW = 400;
     const PARSE_COLORS_WINDOW = 500;
+    // Capture groups: [1] names block, [2] logo key token, [3] colors block.
+    const LOGO_ENTRY_RE = new RegExp(
+      String.raw`\.names\s*=\s*\{([^}]+)\}[\s\S]{0,${PARSE_LINES_WINDOW}}?\.lines\s*=\s*FASTFETCH_DATATEXT_LOGO_(\w+)[\s\S]{0,${PARSE_COLORS_WINDOW}}?\.colors\s*=\s*\{([\s\S]*?)\}`,
+      'g',
+    );
 
     // Parse builtin.c to extract { name, logoKey } for every logo.
     // Each block has: .names = { "Primary", "Alias", ... } and .lines = FASTFETCH_DATATEXT_LOGO_KEY
@@ -128,10 +133,7 @@
       const out  = [];
       const seen = new Set();
       // Windowed matching keeps each match constrained to one builtin.c entry.
-      const re   = new RegExp(
-        String.raw`\.names\s*=\s*\{([^}]+)\}[\s\S]{0,${PARSE_LINES_WINDOW}}?\.lines\s*=\s*FASTFETCH_DATATEXT_LOGO_(\w+)[\s\S]{0,${PARSE_COLORS_WINDOW}}?\.colors\s*=\s*\{([\s\S]*?)\}`,
-        'g',
-      );
+      const re = new RegExp(LOGO_ENTRY_RE.source, LOGO_ENTRY_RE.flags);
       let m;
       while ((m = re.exec(src))) {
         const names    = [...m[1].matchAll(/"([^"]+)"/g)].map(q => q[1]);
@@ -356,7 +358,7 @@
         card.append(top, pre);
         gridEl.append(card);
 
-        // Only observe cards with no cached fetch result yet.
+        // Observe only when no fetch has happened yet (undefined). Null means fetched-but-missing/failed.
         if (cachedArt === undefined) observer.observe(card);
       }
     }
