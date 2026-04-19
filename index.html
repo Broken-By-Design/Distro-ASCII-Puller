@@ -82,6 +82,24 @@
       line-height: 1.25;
       flex: 1;
     }
+    :root {
+      --ansi-black: #1d1f21;
+      --ansi-red: #cc6666;
+      --ansi-green: #b5bd68;
+      --ansi-yellow: #f0c674;
+      --ansi-blue: #81a2be;
+      --ansi-magenta: #b294bb;
+      --ansi-cyan: #8abeb7;
+      --ansi-white: #c5c8c6;
+      --ansi-bright-black: #666;
+      --ansi-bright-red: #ff6b6b;
+      --ansi-bright-green: #c6f177;
+      --ansi-bright-yellow: #ffe08a;
+      --ansi-bright-blue: #8fc7ff;
+      --ansi-bright-magenta: #db9cff;
+      --ansi-bright-cyan: #7ddcff;
+      --ansi-bright-white: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -99,19 +117,24 @@
 
     // Parse builtin.c to extract { name, logoKey } for every logo.
     // Each block has: .names = { "Primary", "Alias", ... } and .lines = FASTFETCH_DATATEXT_LOGO_KEY
+    function parseLogoColors(colorBlock) {
+      return [...colorBlock.matchAll(/(FF_COLOR_(?:FG|BG)_[A-Z_0-9]+(?:\s*"[^"]+")?)/g)]
+        .map(m => m[1].trim());
+    }
+
     function parseLogos(src) {
       const out  = [];
       const seen = new Set();
-      // The {0,400} window covers all fields that may appear between .names and
-      // .lines in a builtin.c entry (typically just .type, .names, and .lines).
-      const re   = /\.names\s*=\s*\{([^}]+)\}[\s\S]{0,400}?\.lines\s*=\s*FASTFETCH_DATATEXT_LOGO_(\w+)/g;
+      // Windowed matching keeps each match constrained to one builtin.c entry.
+      const re   = /\.names\s*=\s*\{([^}]+)\}[\s\S]{0,400}?\.lines\s*=\s*FASTFETCH_DATATEXT_LOGO_(\w+)[\s\S]{0,500}?\.colors\s*=\s*\{([\s\S]*?)\}/g;
       let m;
       while ((m = re.exec(src))) {
         const names    = [...m[1].matchAll(/"([^"]+)"/g)].map(q => q[1]);
         const logoKey  = m[2].toLowerCase();
+        const colors   = parseLogoColors(m[3]);
         if (!names.length || seen.has(logoKey)) continue;
         seen.add(logoKey);
-        out.push({ name: names[0], logoKey });
+        out.push({ name: names[0], logoKey, colors });
       }
       return out.sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -119,13 +142,126 @@
     // In-memory cache for fetched ASCII art (null = not found / error).
     const artCache = new Map();
 
+    const COLOR_EXPR_TO_CSS = {
+      FF_COLOR_FG_BLACK: 'var(--ansi-black)',
+      FF_COLOR_FG_RED: 'var(--ansi-red)',
+      FF_COLOR_FG_GREEN: 'var(--ansi-green)',
+      FF_COLOR_FG_YELLOW: 'var(--ansi-yellow)',
+      FF_COLOR_FG_BLUE: 'var(--ansi-blue)',
+      FF_COLOR_FG_MAGENTA: 'var(--ansi-magenta)',
+      FF_COLOR_FG_CYAN: 'var(--ansi-cyan)',
+      FF_COLOR_FG_WHITE: 'var(--ansi-white)',
+      FF_COLOR_FG_LIGHT_BLACK: 'var(--ansi-bright-black)',
+      FF_COLOR_FG_LIGHT_RED: 'var(--ansi-bright-red)',
+      FF_COLOR_FG_LIGHT_GREEN: 'var(--ansi-bright-green)',
+      FF_COLOR_FG_LIGHT_YELLOW: 'var(--ansi-bright-yellow)',
+      FF_COLOR_FG_LIGHT_BLUE: 'var(--ansi-bright-blue)',
+      FF_COLOR_FG_LIGHT_MAGENTA: 'var(--ansi-bright-magenta)',
+      FF_COLOR_FG_LIGHT_CYAN: 'var(--ansi-bright-cyan)',
+      FF_COLOR_FG_LIGHT_WHITE: 'var(--ansi-bright-white)',
+    };
+
+    const COLOR_EXPR_TO_ANSI = {
+      FF_COLOR_FG_DEFAULT: '\x1b[39m',
+      FF_COLOR_FG_BLACK: '\x1b[30m',
+      FF_COLOR_FG_RED: '\x1b[31m',
+      FF_COLOR_FG_GREEN: '\x1b[32m',
+      FF_COLOR_FG_YELLOW: '\x1b[33m',
+      FF_COLOR_FG_BLUE: '\x1b[34m',
+      FF_COLOR_FG_MAGENTA: '\x1b[35m',
+      FF_COLOR_FG_CYAN: '\x1b[36m',
+      FF_COLOR_FG_WHITE: '\x1b[37m',
+      FF_COLOR_FG_LIGHT_BLACK: '\x1b[90m',
+      FF_COLOR_FG_LIGHT_RED: '\x1b[91m',
+      FF_COLOR_FG_LIGHT_GREEN: '\x1b[92m',
+      FF_COLOR_FG_LIGHT_YELLOW: '\x1b[93m',
+      FF_COLOR_FG_LIGHT_BLUE: '\x1b[94m',
+      FF_COLOR_FG_LIGHT_MAGENTA: '\x1b[95m',
+      FF_COLOR_FG_LIGHT_CYAN: '\x1b[96m',
+      FF_COLOR_FG_LIGHT_WHITE: '\x1b[97m',
+    };
+
+    function ansi256ToCss(index) {
+      if (!Number.isInteger(index) || index < 0 || index > 255) return null;
+      const base = [
+        '#000000', '#800000', '#008000', '#808000', '#000080', '#800080', '#008080', '#c0c0c0',
+        '#808080', '#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff', '#00ffff', '#ffffff',
+      ];
+      if (index < 16) return base[index];
+      if (index >= 232) {
+        const v = 8 + (index - 232) * 10;
+        return `rgb(${v},${v},${v})`;
+      }
+      const idx = index - 16;
+      const r = Math.floor(idx / 36);
+      const g = Math.floor((idx % 36) / 6);
+      const b = idx % 6;
+      const step = [0, 95, 135, 175, 215, 255];
+      return `rgb(${step[r]},${step[g]},${step[b]})`;
+    }
+
+    function colorExprToCss(expr) {
+      if (!expr || expr.startsWith('FF_COLOR_BG_') || expr === 'FF_COLOR_FG_DEFAULT') return null;
+      if (COLOR_EXPR_TO_CSS[expr]) return COLOR_EXPR_TO_CSS[expr];
+      const m256 = expr.match(/^FF_COLOR_FG_256\s*"(\d{1,3})"$/);
+      if (m256) return ansi256ToCss(Number(m256[1]));
+      return null;
+    }
+
+    function colorExprToAnsi(expr) {
+      if (!expr || expr.startsWith('FF_COLOR_BG_')) return '';
+      if (COLOR_EXPR_TO_ANSI[expr]) return COLOR_EXPR_TO_ANSI[expr];
+      const m256 = expr.match(/^FF_COLOR_FG_256\s*"(\d{1,3})"$/);
+      if (m256) return `\x1b[38;5;${Number(m256[1])}m`;
+      return '';
+    }
+
+    function renderArt(pre, art, colors) {
+      const frag = document.createDocumentFragment();
+      const tokenRe = /\$(\d+)/g;
+      let last = 0;
+      let colorExpr = null;
+      let m;
+
+      const appendChunk = (chunk, expr) => {
+        if (!chunk) return;
+        const cssColor = colorExprToCss(expr);
+        if (!cssColor) {
+          frag.append(document.createTextNode(chunk));
+          return;
+        }
+        const span = document.createElement('span');
+        span.style.color = cssColor;
+        span.textContent = chunk;
+        frag.append(span);
+      };
+
+      while ((m = tokenRe.exec(art))) {
+        appendChunk(art.slice(last, m.index), colorExpr);
+        const index = Number(m[1]);
+        if (index === 0) colorExpr = null;
+        else colorExpr = colors[index - 1] || colorExpr;
+        last = tokenRe.lastIndex;
+      }
+      appendChunk(art.slice(last), colorExpr);
+      pre.replaceChildren(frag);
+    }
+
+    function artToAnsi(art, colors) {
+      const out = art.replace(/\$(\d+)/g, (_, raw) => {
+        const index = Number(raw);
+        if (index === 0) return '\x1b[0m';
+        return colorExprToAnsi(colors[index - 1]);
+      });
+      return out + '\x1b[0m';
+    }
+
     async function loadArt(logoKey) {
       if (artCache.has(logoKey)) return artCache.get(logoKey);
       try {
         const res = await fetch(ASCII_BASE + logoKey + '.txt');
         if (!res.ok) { artCache.set(logoKey, null); return null; }
-        // Strip fastfetch color codes ($1, $2, …, $10, etc.) from art text.
-        const art = (await res.text()).replace(/\$\d+/g, '');
+        const art = await res.text();
         artCache.set(logoKey, art);
         return art;
       } catch {
@@ -153,7 +289,7 @@
         const btn = card.querySelector('button');
         loadArt(logoKey).then(art => {
           if (art === null) { pre.textContent = '(logo not found)'; return; }
-          pre.textContent = art;
+          renderArt(pre, art, card._colors || []);
           btn.disabled = false;
         });
       }
@@ -168,6 +304,7 @@
         const card = document.createElement('article');
         card.className = 'card';
         card.dataset.logoKey = d.logoKey;
+        card._colors = d.colors;
 
         // If art is already cached fill it right away, otherwise mark for lazy load.
         const cachedArt = artCache.get(d.logoKey);
@@ -186,16 +323,19 @@
         btn.disabled = cachedArt === undefined || cachedArt === null; // disable until art is loaded
 
         const pre = document.createElement('pre');
-        pre.textContent = cachedArt === undefined ? 'loading...' : (cachedArt === null ? '(logo not found)' : cachedArt);
+        if (cachedArt === undefined) pre.textContent = 'loading...';
+        else if (cachedArt === null) pre.textContent = '(logo not found)';
+        else renderArt(pre, cachedArt, d.colors);
 
         btn.addEventListener('click', async () => {
           const art = artCache.get(card.dataset.logoKey);
           if (!art) return;
+          const ansiArt = artToAnsi(art, d.colors);
           try {
-            await navigator.clipboard.writeText(art);
+            await navigator.clipboard.writeText(ansiArt);
           } catch {
             const t = document.createElement('textarea');
-            t.value = art;
+            t.value = ansiArt;
             document.body.appendChild(t);
             t.select();
             document.execCommand('copy');
@@ -209,7 +349,7 @@
         card.append(top, pre);
         gridEl.append(card);
 
-        if (!cachedArt) observer.observe(card);
+        if (cachedArt === undefined) observer.observe(card);
       }
     }
 
