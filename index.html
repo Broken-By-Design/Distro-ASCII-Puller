@@ -96,35 +96,31 @@
   <script>
     const SOURCE = 'https://raw.githubusercontent.com/dylanaraps/neofetch/master/neofetch';
 
-    const WANT = [
-      { name: 'Arch Linux',  key: 'Arch'       },
-      { name: 'Ubuntu',      key: 'Ubuntu'      },
-      { name: 'Debian',      key: 'Debian'      },
-      { name: 'Fedora',      key: 'Fedora'      },
-      { name: 'Manjaro',     key: 'Manjaro'     },
-      { name: 'Linux Mint',  key: 'Linux Mint'  },
-      { name: 'openSUSE',    key: 'openSUSE'    },
-      { name: 'Kali Linux',  key: 'Kali'        },
-      { name: 'Pop!_OS',     key: 'Pop!_OS'     },
-      { name: 'CentOS',      key: 'CentOS'      },
-      { name: 'Void Linux',  key: 'Void'        },
-      { name: 'Alpine',      key: 'Alpine'      },
-      { name: 'NixOS',       key: 'NixOS'       },
-      { name: 'Gentoo',      key: 'Gentoo'      },
-    ];
-
     function parseArt(src) {
-      return WANT.map(({ name, key }) => {
-        const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(
-          '"' + esc + '"\\*[^\\n]*\\)[\\s\\S]*?' +
-          "read -rd '' ascii_data <<'EOF'\\n([\\s\\S]*?)\\nEOF"
-        );
-        const m = re.exec(src);
-        if (!m) return null;
-        const art = m[1].replace(/\$\{c\d+\}/g, '');
-        return { name, art };
-      }).filter(Boolean);
+      const out = [];
+      const seen = new Set();
+      const caseRe = /^[ \t]*([^\n]*"[^"\n]+"[^\n]*)\)\s*([\s\S]*?)^[ \t]*;;/gm;
+      const fn = /get_distro_ascii\(\)\s*\{([\s\S]*?)^\}/m.exec(src);
+      const fnBody = fn ? fn[1] : src;
+      const asciiCase = /case\s+\$\(trim "\$ascii_distro"\)\s+in([\s\S]*?)^[ \t]*esac/m.exec(fnBody);
+      const scope = asciiCase ? asciiCase[1] : fnBody;
+      let m;
+
+      while ((m = caseRe.exec(scope))) {
+        const labelRaw = m[1];
+        const body = m[2];
+        const heredoc = /(?:read -rd '' ascii_data <<'EOF'|cat <<'EOF')\n([\s\S]*?)\nEOF/.exec(body);
+        if (!heredoc) continue;
+        const art = heredoc[1].replace(/\$\{[^}]+\}/g, '');
+        for (const q of labelRaw.matchAll(/"([^"]+)"/g)) {
+          const name = q[1].trim();
+          if (!name || seen.has(name) || name.includes('$')) continue;
+          seen.add(name);
+          out.push({ name, art });
+        }
+      }
+
+      return out;
     }
 
     let ALL = [];
