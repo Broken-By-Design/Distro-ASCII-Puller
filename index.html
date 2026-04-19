@@ -114,6 +114,8 @@
   <script>
     const BUILTIN_URL = 'https://raw.githubusercontent.com/fastfetch-cli/fastfetch/dev/src/logo/builtin.c';
     const ASCII_BASE  = 'https://raw.githubusercontent.com/fastfetch-cli/fastfetch/dev/src/logo/ascii/';
+    const PARSE_LINES_WINDOW = 400;
+    const PARSE_COLORS_WINDOW = 500;
 
     // Parse builtin.c to extract { name, logoKey } for every logo.
     // Each block has: .names = { "Primary", "Alias", ... } and .lines = FASTFETCH_DATATEXT_LOGO_KEY
@@ -126,7 +128,10 @@
       const out  = [];
       const seen = new Set();
       // Windowed matching keeps each match constrained to one builtin.c entry.
-      const re   = /\.names\s*=\s*\{([^}]+)\}[\s\S]{0,400}?\.lines\s*=\s*FASTFETCH_DATATEXT_LOGO_(\w+)[\s\S]{0,500}?\.colors\s*=\s*\{([\s\S]*?)\}/g;
+      const re   = new RegExp(
+        String.raw`\.names\s*=\s*\{([^}]+)\}[\s\S]{0,${PARSE_LINES_WINDOW}}?\.lines\s*=\s*FASTFETCH_DATATEXT_LOGO_(\w+)[\s\S]{0,${PARSE_COLORS_WINDOW}}?\.colors\s*=\s*\{([\s\S]*?)\}`,
+        'g',
+      );
       let m;
       while ((m = re.exec(src))) {
         const names    = [...m[1].matchAll(/"([^"]+)"/g)].map(q => q[1]);
@@ -141,6 +146,7 @@
 
     // In-memory cache for fetched ASCII art (null = not found / error).
     const artCache = new Map();
+    const cardColors = new WeakMap();
 
     const COLOR_EXPR_TO_CSS = {
       FF_COLOR_FG_BLACK: 'var(--ansi-black)',
@@ -240,7 +246,7 @@
         appendChunk(art.slice(last, m.index), colorExpr);
         const index = Number(m[1]);
         if (index === 0) colorExpr = null;
-        else colorExpr = colors[index - 1] || colorExpr;
+        else if (index > 0 && index <= colors.length) colorExpr = colors[index - 1] || colorExpr;
         last = tokenRe.lastIndex;
       }
       appendChunk(art.slice(last), colorExpr);
@@ -251,7 +257,8 @@
       const out = art.replace(/\$(\d+)/g, (_, raw) => {
         const index = Number(raw);
         if (index === 0) return '\x1b[0m';
-        return colorExprToAnsi(colors[index - 1]);
+        if (index > 0 && index <= colors.length) return colorExprToAnsi(colors[index - 1]);
+        return '';
       });
       return out + '\x1b[0m';
     }
@@ -289,7 +296,7 @@
         const btn = card.querySelector('button');
         loadArt(logoKey).then(art => {
           if (art === null) { pre.textContent = '(logo not found)'; return; }
-          renderArt(pre, art, card._colors || []);
+          renderArt(pre, art, cardColors.get(card) || []);
           btn.disabled = false;
         });
       }
@@ -304,7 +311,7 @@
         const card = document.createElement('article');
         card.className = 'card';
         card.dataset.logoKey = d.logoKey;
-        card._colors = d.colors;
+        cardColors.set(card, d.colors);
 
         // If art is already cached fill it right away, otherwise mark for lazy load.
         const cachedArt = artCache.get(d.logoKey);
