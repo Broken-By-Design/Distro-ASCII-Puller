@@ -246,7 +246,7 @@
         appendChunk(art.slice(last, m.index), colorExpr);
         const index = Number(m[1]);
         if (index === 0) colorExpr = null;
-        else if (index > 0 && index <= colors.length) colorExpr = colors[index - 1] || colorExpr;
+        else if (index > 0 && index <= colors.length) colorExpr = colors[index - 1];
         last = tokenRe.lastIndex;
       }
       appendChunk(art.slice(last), colorExpr);
@@ -356,6 +356,7 @@
         card.append(top, pre);
         gridEl.append(card);
 
+        // Only observe cards with no cached fetch result yet.
         if (cachedArt === undefined) observer.observe(card);
       }
     }
