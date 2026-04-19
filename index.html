@@ -1,461 +1,192 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Distro ASCII Browser</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>distro ascii browser</title>
   <style>
-    :root {
-      --bg: #0b0f10;
-      --panel: #13191c;
-      --text: #c7f9cc;
-      --muted: #7fa18a;
-      --border: #213137;
-      --accent: #50fa7b;
-      --btn: #1c282d;
-      --btn-hover: #26363d;
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
+    *, *::before, *::after { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px;
-      background: var(--bg);
-      color: var(--text);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      padding: 1rem;
+      background: #0d0d0d;
+      color: #c8ffc8;
+      font: 13px/1 "Courier New", Courier, monospace;
     }
-    .container { max-width: 1400px; margin: 0 auto; }
-    .search-wrap { position: sticky; top: 0; padding-bottom: 14px; background: linear-gradient(var(--bg), var(--bg) 80%, transparent); z-index: 2; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #0d0d0d;
+      padding-bottom: .75rem;
+      margin-bottom: .75rem;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    h1 {
+      margin: 0 0 .75rem;
+      font-size: 1rem;
+      color: #5fff5f;
+    }
     #search {
+      display: block;
       width: 100%;
-      padding: 12px 14px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: #0f1417;
-      color: var(--text);
-      outline: none;
+      padding: .5rem .6rem;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      color: inherit;
       font: inherit;
+      outline: none;
     }
-    #search:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    #search:focus { border-color: #5fff5f; }
+    #status { padding: 1.5rem 0; color: #666; }
+    #count { color: #555; font-size: .8rem; margin-bottom: .6rem; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: .6rem;
     }
     .card {
+      border: 1px solid #1e1e1e;
+      background: #111;
       display: flex;
       flex-direction: column;
-      min-height: 100%;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--panel);
-      overflow: hidden;
     }
-    .card-header {
+    .card-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
+      gap: .5rem;
+      padding: .35rem .6rem;
+      border-bottom: 1px solid #1e1e1e;
     }
-    .name { margin: 0; font-size: 14px; color: var(--muted); }
-    .copy-btn {
-      border: 1px solid var(--border);
-      background: var(--btn);
-      color: var(--text);
-      border-radius: 6px;
-      padding: 6px 10px;
-      cursor: pointer;
+    .card-name { color: #5fff5f; font-size: .8rem; }
+    .copy {
+      flex-shrink: 0;
+      background: #181818;
+      border: 1px solid #2a2a2a;
+      color: #777;
       font: inherit;
-      font-size: 12px;
+      font-size: .75rem;
+      padding: .2rem .45rem;
+      cursor: pointer;
+      line-height: 1.4;
     }
-    .copy-btn:hover { background: var(--btn-hover); }
+    .copy:hover { color: #c8ffc8; border-color: #444; }
     pre {
       margin: 0;
-      padding: 12px;
-      white-space: pre;
+      padding: .5rem .6rem;
       overflow: auto;
-      line-height: 1.2;
+      white-space: pre;
       font: inherit;
-      color: var(--text);
+      color: #c8ffc8;
+      line-height: 1.25;
       flex: 1;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="search-wrap">
-      <input id="search" type="text" placeholder="Search distros..." autocomplete="off" />
-    </div>
-    <section id="grid" class="grid" aria-live="polite"></section>
-  </div>
+  <header>
+    <h1>// distro ascii browser</h1>
+    <input id="search" type="search" placeholder="filter distros..." autocomplete="off" spellcheck="false">
+  </header>
+  <p id="status">fetching logos from neofetch...</p>
+  <p id="count" hidden></p>
+  <div id="grid" class="grid"></div>
 
   <script>
-    const distros = [
-    {
-      name: "Arch Linux",
-      art: String.raw`\${c1}                   -\`
-                  .o+\`
-                 \`ooo/
-                \`+oooo:
-               \`+oooooo:
-               -+oooooo+:
-             \`/:-:++oooo+:
-            \`/++++/+++++++:
-           \`/++++++++++++++:
-          \`/+++o\${c2}oooooooo\${c1}oooo/\`
-\${c2}         \${c1}./\${c2}ooosssso++osssssso\${c1}+\`
-\${c2}        .oossssso-\`\`\`\`/ossssss+\`
-       -osssssso.      :ssssssso.
-      :osssssss/        osssso+++.
-     /ossssssss/        +ssssooo/-
-   \`/ossssso+/:-        -:/+osssso+-
-  \`+sso+:-\`                 \`.-/+oso:
- \`++:.                           \`-/+/
- .\`                                 \`/`
-    },
-    {
-      name: "Ubuntu",
-      art: String.raw`\${c1}            .-/+oossssoo+\-.
-        ´:+ssssssssssssssssss+:\`
-      -+ssssssssssssssssssyyssss+-
-    .ossssssssssssssssss\${c2}dMMMNy\${c1}sssso.
-   /sssssssssss\${c2}hdmmNNmmyNMMMMh\${c1}ssssss\
-  +sssssssss\${c2}hm\${c1}yd\${c2}MMMMMMMNddddy\${c1}ssssssss+
- /ssssssss\${c2}hNMMM\${c1}yh\${c2}hyyyyhmNMMMNh\${c1}ssssssss\
-.ssssssss\${c2}dMMMNh\${c1}ssssssssss\${c2}hNMMMd\${c1}ssssssss.
-+ssss\${c2}hhhyNMMNy\${c1}ssssssssssss\${c2}yNMMMy\${c1}sssssss+
-oss\${c2}yNMMMNyMMh\${c1}ssssssssssssss\${c2}hmmmh\${c1}ssssssso
-oss\${c2}yNMMMNyMMh\${c1}sssssssssssssshmmmh\${c1}ssssssso
-+ssss\${c2}hhhyNMMNy\${c1}ssssssssssss\${c2}yNMMMy\${c1}sssssss+
-.ssssssss\${c2}dMMMNh\${c1}ssssssssss\${c2}hNMMMd\${c1}ssssssss.
- \ssssssss\${c2}hNMMM\${c1}yh\${c2}hyyyyhdNMMMNh\${c1}ssssssss/
-  +sssssssss\${c2}dm\${c1}yd\${c2}MMMMMMMMddddy\${c1}ssssssss+
-   \sssssssssss\${c2}hdmNNNNmyNMMMMh\${c1}ssssss/
-    .ossssssssssssssssss\${c2}dMMMNy\${c1}sssso.
-      -+sssssssssssssssss\${c2}yyy\${c1}ssss+-
-        \`:+ssssssssssssssssss+:\`
-            .-\+oossssoo+/-.`
-    },
-    {
-      name: "Debian",
-      art: String.raw`\${c2}       _,met$$$$$gg.
-    ,g$$$$$$$$$$$$$$$P.
-  ,g$$P"        """Y$$.".
- ,$$P'              \`$$$.
-',$$P       ,ggs.     \`$$b:
-\`d$$'     ,$P"'   \${c1}.\${c2}    $$$
- $$P      d$'     \${c1},\${c2}    $$P
- $$:      $$.   \${c1}-\${c2}    ,d$$'
- $$;      Y$b._   _,d$P'
- Y$$.    \${c1}\`.\${c2}\`"Y$$$$P"'
-\${c2} \`$$b      \${c1}"-.__
-\${c2}  \`Y$$
-   \`Y$$.
-     \`$$b.
-       \`Y$$b.
-          \`"Y$b._
-              \`"""`
-    },
-    {
-      name: "Fedora",
-      art: String.raw`\${c1}             .',;::::;,'.
-         .';:cccccccccccc:;,.
-      .;cccccccccccccccccccccc;.
-    .:cccccccccccccccccccccccccc:.
-  .;ccccccccccccc;\${c2}.:dddl:.\${c1};ccccccc;.
- .:ccccccccccccc;\${c2}OWMKOOXMWd\${c1};ccccccc:.
-.:ccccccccccccc;\${c2}KMMc\${c1};cc;\${c2}xMMc\${c1};ccccccc:.
-,cccccccccccccc;\${c2}MMM.\${c1};cc;\${c2};WW:\${c1};cccccccc,
-:cccccccccccccc;\${c2}MMM.\${c1};cccccccccccccccc:
-:ccccccc;\${c2}oxOOOo\${c1};\${c2}MMM0OOk.\${c1};cccccccccccc:
-cccccc;\${c2}0MMKxdd:\${c1};\${c2}MMMkddc.\${c1};cccccccccccc;
-ccccc;\${c2}XM0'\${c1};cccc;\${c2}MMM.\${c1};cccccccccccccccc'
-ccccc;\${c2}MMo\${c1};ccccc;\${c2}MMW.\${c1};ccccccccccccccc;
-ccccc;\${c2}0MNc.\${c1}ccc\${c2}.xMMd\${c1};ccccccccccccccc;
-cccccc;\${c2}dNMWXXXWM0:\${c1};cccccccccccccc:,
-cccccccc;\${c2}.:odl:.\${c1};cccccccccccccc:,.
-:cccccccccccccccccccccccccccc:'.
-.:cccccccccccccccccccccc:;,..
-  '::cccccccccccccc::;,.`
-    },
-    {
-      name: "Manjaro",
-      art: String.raw`\${c1}██████████████████  ████████
-██████████████████  ████████
-██████████████████  ████████
-██████████████████  ████████
-████████            ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████
-████████  ████████  ████████`
-    },
-    {
-      name: "Linux Mint",
-      art: String.raw`\${c2}             ...-:::::-...
-\${c2}          .-MMMMMMMMMMMMMMM-.
-      .-MMMM\${c1}\`..-:::::::-..\`\${c2}MMMM-.
-    .:MMMM\${c1}.:MMMMMMMMMMMMMMM:.\${c2}MMMM:.
-   -MMM\${c1}-M---MMMMMMMMMMMMMMMMMMM.\${c2}MMM-
- \`:MMM\${c1}:MM\`  :MMMM:....::-...-MMMM:\${c2}MMM:\`
- :MMM\${c1}:MMM\`  :MM:\`  \`\`    \`\`  \`:MMM:\${c2}MMM:
-.MMM\${c1}.MMMM\`  :MM.  -MM.  .MM-  \`MMMM.\${c2}MMM.
-:MMM\${c1}:MMMM\`  :MM.  -MM-  .MM:  \`MMMM-\${c2}MMM:
-:MMM\${c1}:MMMM\`  :MM.  -MM-  .MM:  \`MMMM:\${c2}MMM:
-:MMM\${c1}:MMMM\`  :MM.  -MM-  .MM:  \`MMMM-\${c2}MMM:
-.MMM\${c1}.MMMM\`  :MM:--:MM:--:MM:  \`MMMM.\${c2}MMM.
- :MMM\${c1}:MMM-  \`-MMMMMMMMMMMM-\`  -MMM-\${c2}MMM:
-  :MMM\${c1}:MMM:\`                \`:MMM:\${c2}MMM:
-   .MMM\${c1}.MMMM:--------------:MMMM.\${c2}MMM.
-     '-MMMM\${c1}.-MMMMMMMMMMMMMMM-.\${c2}MMMM-'
-       '.-MMMM\${c1}\`\`--:::::--\`\`\${c2}MMMM-.'
-\${c2}            '-MMMMMMMMMMMMM-'
-\${c2}               \`\`-:::::-\`\``
-    },
-    {
-      name: "openSUSE",
-      art: String.raw`\${c2}           .;ldkO0000Okdl;.
-       .;d00xl:^''''''^:ok00d;.
-     .d00l'                'o00d.
-   .d0Kd'\${c1}  Okxol:;,.          \${c2}:O0d.
-  .OK\${c1}KKK0kOKKKKKKKKKKOxo:,      \${c2}lKO.
- ,0K\${c1}KKKKKKKKKKKKKKK0P^\${c2},,,\${c1}^dx:\${c2}    ;00,
-.OK\${c1}KKKKKKKKKKKKKKKk'\${c2}.oOPPb.\${c1}'0k.\${c2}   cKO.
-:KK\${c1}KKKKKKKKKKKKKKK: \${c2}kKx..dd \${c1}lKd\${c2}   'OK:
-dKK\${c1}KKKKKKKKKOx0KKKd \${c2}^0KKKO' \${c1}kKKc\${c2}   dKd
-dKK\${c1}KKKKKKKKKK;.;oOKx,..\${c2}^\${c1}..;kKKK0.\${c2}  dKd
-:KK\${c1}KKKKKKKKKK0o;...^cdxxOK0O/^^'  \${c2}.0K:
- kKK\${c1}KKKKKKKKKKKKK0x;,,......,;od  \${c2}lKk
- '0K\${c1}KKKKKKKKKKKKKKKKKKKK00KKOo^  \${c2}c00'
-  'kK\${c1}KKOxddxkOO00000Okxoc;''   \${c2}.dKk'
-    l0Ko.                    .c00l'
-     'l0Kk:.              .;xK0l'
-        'lkK0xl:;,,,,;:ldO0kl'
-            '^:ldxkkkkxdl:^'`
-    },
-    {
-      name: "Kali Linux",
-      art: String.raw`\${c1}..............
-            ..,;:ccc,.
-          ......''';lxO.
-.....''''..........,:ld;
-           .';;;:::;,,.x,
-      ..'''.            0Xxoc:,.  ...
-  ....                ,ONkc;,;cokOdc',.
- .                   OMo           ':\${c2}dd\${c1}o.
-                    dMc               :OO;
-                    0M.                 .:o.
-                    ;Wd
-                     ;XO,
-                       ,d0Odlc;,..
-                           ..',;:cdOOd::,.
-                                    .:d;.':;.
-                                       'd,  .'
-                                         ;l   ..
-                                          .o
-                                            c
-                                            .'
-                                             .`
-    },
-    {
-      name: "Pop!_OS",
-      art: String.raw`\${c1}             /////////////
-         /////////////////////
-      ///////\${c2}*767\${c1}////////////////
-    //////\${c2}7676767676*\${c1}//////////////
-   /////\${c2}76767\${c1}//\${c2}7676767\${c1}//////////////
-  /////\${c2}767676\${c1}///\${c2}*76767\${c1}///////////////
- ///////\${c2}767676\${c1}///\${c2}76767\${c1}.///\${c2}7676*\${c1}///////
-/////////\${c2}767676\${c1}//\${c2}76767\${c1}///\${c2}767676\${c1}////////
-//////////\${c2}76767676767\${c1}////\${c2}76767\${c1}/////////
-///////////\${c2}76767676\${c1}//////\${c2}7676\${c1}//////////
-////////////,\${c2}7676\${c1},///////\${c2}767\${c1}///////////
-/////////////*\${c2}7676\${c1}///////\${c2}76\${c1}////////////
-///////////////\${c2}7676\${c1}////////////////////
- ///////////////\${c2}7676\${c1}///\${c2}767\${c1}////////////
-  //////////////////////\${c2}'\${c1}////////////
-   //////\${c2}.7676767676767676767,\${c1}//////
-    /////\${c2}767676767676767676767\${c1}/////
-      ///////////////////////////
-         /////////////////////
-             /////////////`
-    },
-    {
-      name: "CentOS",
-      art: String.raw`\${c1}                 ..
-               .PLTJ.
-              <><><><>
-     \${c2}KKSSV' 4KKK \${c1}LJ\${c4} KKKL.'VSSKK
-     \${c2}KKV' 4KKKKK \${c1}LJ\${c4} KKKKAL 'VKK
-     \${c2}V' ' 'VKKKK \${c1}LJ\${c4} KKKKV' ' 'V
-     \${c2}.4MA.' 'VKK \${c1}LJ\${c4} KKV' '.4Mb.
-\${c4}   . \${c2}KKKKKA.' 'V \${c1}LJ\${c4} V' '.4KKKKK \${c3}.
-\${c4} .4D \${c2}KKKKKKKA.'' \${c1}LJ\${c4} ''.4KKKKKKK \${c3}FA.
-\${c4}<QDD ++++++++++++  \${c3}++++++++++++ GFD>
-\${c4} 'VD \${c3}KKKKKKKK'.. \${c2}LJ \${c1}..'KKKKKKKK \${c3}FV
-\${c4}   ' \${c3}VKKKKK'. .4 \${c2}LJ \${c1}K. .'KKKKKV \${c3}'
-     \${c3} 'VK'. .4KK \${c2}LJ \${c1}KKA. .'KV'
-     \${c3}A. . .4KKKK \${c2}LJ \${c1}KKKKA. . .4
-     \${c3}KKA. 'KKKKK \${c2}LJ \${c1}KKKKK' .4KK
-     \${c3}KKSSA. VKKK \${c2}LJ \${c1}KKKV .4SSKK
-\${c2}              <><><><>
-               'MKKM'
-                 ''`
-    },
-    {
-      name: "Void Linux",
-      art: String.raw`\${c1}                __.;=====;.__
-            _.=+==++=++=+=+===;.
-             -=+++=+===+=+=+++++=_
-        .     -=:\`\`     \`--==+=++==.
-       _vi,    \`            --+=++++:
-      .uvnvi.       _._       -==+==+.
-     .vvnvnI\`    .;==|==;.     :|=||=|.
-\${c2}+QmQQm\${c1}pvvnv; \${c2}_yYsyQQWUUQQQm #QmQ#\${c1}:\${c2}QQQWUV$QQm.
-\${c2} -QQWQW\${c1}pvvo\${c2}wZ?.wQQQE\${c1}==<\${c2}QWWQ/QWQW.QQWW\${c1}(: \${c2}jQWQE
-\${c2}  -$QQQQmmU'  jQQQ@\${c1}+=<\${c2}QWQQ)mQQQ.mQQQC\${c1}+;\${c2}jWQQ@'
-\${c2}   -$WQ8Y\${c1}nI:   \${c2}QWQQwgQQWV\${c1}\`\${c2}mWQQ.jQWQQgyyWW@!
-\${c1}     -1vvnvv.     \`~+++\`        ++|+++
-      +vnvnnv,                 \`-|===
-       +vnvnvns.           .      :=-
-        -Invnvvnsi..___..=sv=.     \`
-          +Invnvnvnnnnnnnnvvnn;.
-            ~|Invnvnvvnvvvnnv}+\`
-               -~|{*l}*|~`
-    },
-    {
-      name: "Alpine",
-      art: String.raw`\${c1}       .hddddddddddddddddddddddh.
-      :dddddddddddddddddddddddddd:
-     /dddddddddddddddddddddddddddd/
-    +dddddddddddddddddddddddddddddd+
-  \`sdddddddddddddddddddddddddddddddds\`
- \`ydddddddddddd++hdddddddddddddddddddy\`
-.hddddddddddd+\`  \`+ddddh:-sdddddddddddh.
-hdddddddddd+\`      \`+y:    .sddddddddddh
-ddddddddh+\`   \`//\`   \`.\`     -sddddddddd
-ddddddh+\`   \`/hddh/\`   \`:s-    -sddddddd
-ddddh+\`   \`/+/dddddh/\`   \`+s-    -sddddd
-ddd+\`   \`/o\` :dddddddh/\`   \`oy-    .yddd
-hdddyo+ohddyosdddddddddho+oydddy++ohdddh
-.hddddddddddddddddddddddddddddddddddddh.
- \`yddddddddddddddddddddddddddddddddddy\`
-  \`sdddddddddddddddddddddddddddddddds\`
-    +dddddddddddddddddddddddddddddd+
-     /dddddddddddddddddddddddddddd/
-      :dddddddddddddddddddddddddd:
-       .hddddddddddddddddddddddh.`
-    },
-    {
-      name: "NixOS",
-      art: String.raw`\${c1}          ▗▄▄▄       \${c2}▗▄▄▄▄    ▄▄▄▖
-\${c1}          ▜███▙       \${c2}▜███▙  ▟███▛
-\${c1}           ▜███▙       \${c2}▜███▙▟███▛
-\${c1}            ▜███▙       \${c2}▜██████▛
-\${c1}     ▟█████████████████▙ \${c2}▜████▛     \${c1}▟▙
-\${c1}    ▟███████████████████▙ \${c2}▜███▙    \${c1}▟██▙
-\${c2}           ▄▄▄▄▖           ▜███▙  \${c1}▟███▛
-\${c2}          ▟███▛             ▜██▛ \${c1}▟███▛
-\${c2}         ▟███▛               ▜▛ \${c1}▟███▛
-\${c2}▟███████████▛                  \${c1}▟██████████▙
-\${c2}▜██████████▛                  \${c1}▟███████████▛
-\${c2}      ▟███▛ \${c1}▟▙               ▟███▛
-\${c2}     ▟███▛ \${c1}▟██▙             ▟███▛
-\${c2}    ▟███▛  \${c1}▜███▙           ▝▀▀▀▀
-\${c2}    ▜██▛    \${c1}▜███▙ \${c2}▜██████████████████▛
-\${c2}     ▜▛     \${c1}▟████▙ \${c2}▜████████████████▛
-\${c1}           ▟██████▙       \${c2}▜███▙
-\${c1}          ▟███▛▜███▙       \${c2}▜███▙
-\${c1}         ▟███▛  ▜███▙       \${c2}▜███▙
-\${c1}         ▝▀▀▀    ▀▀▀▀▘       \${c2}▀▀▀▘`
-    },
-    {
-      name: "Gentoo",
-      art: String.raw`\${c1}         -/oyddmdhs+:.
-     -o\${c2}dNMMMMMMMMNNmhy+\${c1}-\`
-   -y\${c2}NMMMMMMMMMMMNNNmmdhy\${c1}+-
- \`o\${c2}mMMMMMMMMMMMMNmdmmmmddhhy\${c1}/\`
- om\${c2}MMMMMMMMMMMN\${c1}hhyyyo\${c2}hmdddhhhd\${c1}o\`
-.y\${c2}dMMMMMMMMMMd\${c1}hs++so/s\${c2}mdddhhhhdm\${c1}+\`
- oy\${c2}hdmNMMMMMMMN\${c1}dyooy\${c2}dmddddhhhhyhN\${c1}d.
-  :o\${c2}yhhdNNMMMMMMMNNNmmdddhhhhhyym\${c1}Mh
-    .:\${c2}+sydNMMMMMNNNmmmdddhhhhhhmM\${c1}my
-       /m\${c2}MMMMMMNNNmmmdddhhhhhmMNh\${c1}s:
-    \`o\${c2}NMMMMMMMNNNmmmddddhhdmMNhs\${c1}+\`
-  \`s\${c2}NMMMMMMMMNNNmmmdddddmNMmhs\${c1}/.
- /N\${c2}MMMMMMMMNNNNmmmdddmNMNdso\${c1}:\`
-+M\${c2}MMMMMMNNNNNmmmmdmNMNdso\${c1}/-
-yM\${c2}MNNNNNNNmmmmmNNMmhs+/\${c1}-\`
-/h\${c2}MMNNNNNNNNMNdhs++/\${c1}-\`
-\`/\${c2}ohdmmddhys+++/:\${c1}.\`
-  \`-//////:--.`
-    },
+    const SOURCE = 'https://raw.githubusercontent.com/dylanaraps/neofetch/master/neofetch';
+
+    const WANT = [
+      { name: 'Arch Linux',  key: 'Arch'       },
+      { name: 'Ubuntu',      key: 'Ubuntu'      },
+      { name: 'Debian',      key: 'Debian'      },
+      { name: 'Fedora',      key: 'Fedora'      },
+      { name: 'Manjaro',     key: 'Manjaro'     },
+      { name: 'Linux Mint',  key: 'Linux Mint'  },
+      { name: 'openSUSE',    key: 'openSUSE'    },
+      { name: 'Kali Linux',  key: 'Kali'        },
+      { name: 'Pop!_OS',     key: 'Pop!_OS'     },
+      { name: 'CentOS',      key: 'CentOS'      },
+      { name: 'Void Linux',  key: 'Void'        },
+      { name: 'Alpine',      key: 'Alpine'      },
+      { name: 'NixOS',       key: 'NixOS'       },
+      { name: 'Gentoo',      key: 'Gentoo'      },
     ];
 
-    const grid = document.getElementById('grid');
-    const searchInput = document.getElementById('search');
+    function parseArt(src) {
+      return WANT.map(({ name, key }) => {
+        const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(
+          '"' + esc + '"\\*[^\\n]*\\)[\\s\\S]*?' +
+          "read -rd '' ascii_data <<'EOF'\\n([\\s\\S]*?)\\nEOF"
+        );
+        const m = re.exec(src);
+        if (!m) return null;
+        const art = m[1].replace(/\$\{c\d+\}/g, '');
+        return { name, art };
+      }).filter(Boolean);
+    }
+
+    let ALL = [];
+    const statusEl = document.getElementById('status');
+    const countEl  = document.getElementById('count');
+    const gridEl   = document.getElementById('grid');
+    const searchEl = document.getElementById('search');
 
     function render(items) {
-      grid.innerHTML = '';
-      for (const distro of items) {
+      countEl.hidden = false;
+      countEl.textContent = items.length + (items.length === 1 ? ' distro' : ' distros');
+      gridEl.innerHTML = '';
+      for (const d of items) {
         const card = document.createElement('article');
         card.className = 'card';
 
-        const header = document.createElement('div');
-        header.className = 'card-header';
+        const top = document.createElement('div');
+        top.className = 'card-top';
 
-        const title = document.createElement('h2');
-        title.className = 'name';
-        title.textContent = distro.name;
+        const nameEl = document.createElement('span');
+        nameEl.className = 'card-name';
+        nameEl.textContent = d.name;
 
-        const button = document.createElement('button');
-        button.className = 'copy-btn';
-        button.type = 'button';
-        button.textContent = 'Copy';
+        const btn = document.createElement('button');
+        btn.className = 'copy';
+        btn.textContent = 'copy';
 
         const pre = document.createElement('pre');
-        pre.textContent = distro.art;
+        pre.textContent = d.art;
 
-        button.addEventListener('click', async () => {
-          const original = button.textContent;
+        btn.addEventListener('click', async () => {
           try {
-            await navigator.clipboard.writeText(distro.art);
+            await navigator.clipboard.writeText(d.art);
           } catch {
-            const ta = document.createElement('textarea');
-            ta.value = distro.art;
-            document.body.appendChild(ta);
-            ta.select();
+            const t = document.createElement('textarea');
+            t.value = d.art;
+            document.body.appendChild(t);
+            t.select();
             document.execCommand('copy');
-            ta.remove();
+            t.remove();
           }
-          button.textContent = 'Copied!';
-          setTimeout(() => { button.textContent = original; }, 1000);
+          btn.textContent = 'copied!';
+          setTimeout(() => { btn.textContent = 'copy'; }, 1200);
         });
 
-        header.append(title, button);
-        card.append(header, pre);
-        grid.append(card);
+        top.append(nameEl, btn);
+        card.append(top, pre);
+        gridEl.append(card);
       }
     }
 
     function filter() {
-      const q = searchInput.value.trim().toLowerCase();
-      if (!q) {
-        render(distros);
-        return;
-      }
-      render(distros.filter((d) => d.name.toLowerCase().includes(q)));
+      const q = searchEl.value.trim().toLowerCase();
+      render(q ? ALL.filter(d => d.name.toLowerCase().includes(q)) : ALL);
     }
 
-    searchInput.addEventListener('input', filter);
-    render(distros);
+    searchEl.addEventListener('input', filter);
+
+    fetch(SOURCE)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(src => { ALL = parseArt(src); statusEl.remove(); render(ALL); })
+      .catch(err => { statusEl.textContent = 'error: ' + err.message; });
   </script>
 </body>
 </html>
